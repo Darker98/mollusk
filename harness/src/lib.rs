@@ -447,6 +447,7 @@ pub mod file;
 pub mod fuzz;
 pub mod program;
 pub mod sysvar;
+pub mod lock;
 
 // Re-export result module from mollusk-svm-result crate
 pub use mollusk_svm_result as result;
@@ -675,6 +676,10 @@ impl Mollusk {
         self.program_cache.add_program(program_id, loader_key, elf);
     }
 
+    pub fn toggle_lock(&mut self, locked: bool) {
+        self.sysvars.toggle_lock(locked);
+    }
+
     /// Warp the test environment to a slot by updating sysvars.
     pub fn warp_to_slot(&mut self, slot: u64) {
         self.sysvars.warp_to_slot(slot)
@@ -687,6 +692,10 @@ impl Mollusk {
         instruction: &Instruction,
         accounts: &[(Pubkey, Account)],
     ) -> InstructionResult {
+        if self.sysvars.lock.locked == true {
+            panic!("Sysvar lock is engaged. Cannot process instruction.");
+        }
+
         let mut compute_units_consumed = 0;
         let mut timings = ExecuteTimings::default();
 
@@ -1315,5 +1324,39 @@ impl<AS: AccountStore> MolluskContext<AS> {
             .process_and_validate_instruction_chain(instructions, &accounts);
         self.consume_mollusk_result(&result);
         result
+    }
+}
+    
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_process_instruction_with_sysvar_lock() {
+        let program_id = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+
+        let instruction = Instruction::new_with_bytes(
+            program_id,
+            &[],
+            vec![
+                AccountMeta::new(key1, false),
+                AccountMeta::new_readonly(key2, false),
+            ],
+        );
+
+        let accounts = vec![
+            (key1, Account::default()),
+            (key2, Account::default()),
+        ];
+
+        let mut mollusk = {
+            let mollusk = Mollusk::default();
+            mollusk
+        };
+
+        mollusk.toggle_lock(true); // Engage the lock
+        let result = mollusk.process_instruction(&instruction, &accounts);
     }
 }

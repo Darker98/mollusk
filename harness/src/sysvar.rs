@@ -1,18 +1,7 @@
 //! Module for working with Solana sysvars.
 
 use {
-    solana_account::{Account, ReadableAccount},
-    solana_clock::{Clock, Slot},
-    solana_epoch_rewards::EpochRewards,
-    solana_epoch_schedule::EpochSchedule,
-    solana_hash::Hash,
-    solana_program_runtime::sysvar_cache::SysvarCache,
-    solana_pubkey::Pubkey,
-    solana_rent::Rent,
-    solana_slot_hashes::{SlotHashes, MAX_ENTRIES as SLOT_HASHES_MAX_ENTRIES},
-    solana_stake_interface::stake_history::{StakeHistory, StakeHistoryEntry},
-    solana_sysvar::{self, last_restart_slot::LastRestartSlot, SysvarSerialize},
-    solana_sysvar_id::SysvarId,
+    crate::lock::Lock, solana_account::{Account, ReadableAccount}, solana_clock::{Clock, Slot}, solana_epoch_rewards::EpochRewards, solana_epoch_schedule::EpochSchedule, solana_hash::Hash, solana_program_runtime::sysvar_cache::SysvarCache, solana_pubkey::Pubkey, solana_rent::Rent, solana_slot_hashes::{SlotHashes, MAX_ENTRIES as SLOT_HASHES_MAX_ENTRIES}, solana_stake_interface::stake_history::{StakeHistory, StakeHistoryEntry}, solana_sysvar::{self, last_restart_slot::LastRestartSlot, SysvarSerialize}, solana_sysvar_id::SysvarId
 };
 
 // Agave's sysvar cache is difficult to work with, so Mollusk offers a wrapper
@@ -26,6 +15,7 @@ pub struct Sysvars {
     pub rent: Rent,
     pub slot_hashes: SlotHashes,
     pub stake_history: StakeHistory,
+    pub lock: Lock,
 }
 
 impl Default for Sysvars {
@@ -35,6 +25,7 @@ impl Default for Sysvars {
         let epoch_schedule = EpochSchedule::without_warmup();
         let last_restart_slot = LastRestartSlot::default();
         let rent = Rent::default();
+        let lock = Lock::default();
 
         let slot_hashes = {
             let mut default_slot_hashes = vec![(0, Hash::default()); SLOT_HASHES_MAX_ENTRIES];
@@ -53,6 +44,7 @@ impl Default for Sysvars {
             rent,
             slot_hashes,
             stake_history,
+            lock,
         }
     }
 }
@@ -87,6 +79,8 @@ impl Sysvars {
             Some(self.sysvar_account(&self.slot_hashes).1)
         } else if pubkey.eq(&StakeHistory::id()) {
             Some(self.sysvar_account(&self.stake_history).1)
+        } else if pubkey.eq(&Lock::id()) {
+            Some(self.sysvar_account(&self.lock).1)
         } else {
             None
         }
@@ -127,6 +121,11 @@ impl Sysvars {
         self.sysvar_account(&self.stake_history)
     }
 
+    /// Get the key and account for the lock sysvar.
+    pub fn keyed_account_for_lock_sysvar(&self) -> (Pubkey, Account) {
+        self.sysvar_account(&self.lock)
+    }
+
     pub(crate) fn get_all_keyed_sysvar_accounts(&self) -> Vec<(Pubkey, Account)> {
         vec![
             self.keyed_account_for_clock_sysvar(),
@@ -136,7 +135,12 @@ impl Sysvars {
             self.keyed_account_for_rent_sysvar(),
             self.keyed_account_for_slot_hashes_sysvar(),
             self.keyed_account_for_stake_history_sysvar(),
+            self.keyed_account_for_lock_sysvar(),
         ]
+    }
+
+    pub fn toggle_lock(&mut self, locked: bool) {
+        self.lock.locked = locked;
     }
 
     /// Warp the test environment to a slot by updating sysvars.
@@ -212,6 +216,9 @@ impl Sysvars {
             if pubkey.eq(&StakeHistory::id()) {
                 set_sysvar(&bincode::serialize(&self.stake_history).unwrap());
             }
+            if pubkey.eq(&Lock::id()) {
+                set_sysvar(&bincode::serialize(&self.lock).unwrap());
+            }
         });
 
         sysvar_cache
@@ -242,6 +249,9 @@ impl From<&Sysvars> for SysvarCache {
             }
             if pubkey.eq(&StakeHistory::id()) {
                 set_sysvar(&bincode::serialize(&mollusk_cache.stake_history).unwrap());
+            }
+            if pubkey.eq(&Lock::id()) {
+                set_sysvar(&bincode::serialize(&mollusk_cache.lock).unwrap());
             }
         });
         sysvar_cache
@@ -310,6 +320,7 @@ mod tests {
             stake_history.add(9, StakeHistoryEntry::default());
             stake_history
         };
+        let lock = Lock::new(false);
 
         let sysvars = Sysvars {
             clock,
@@ -319,6 +330,7 @@ mod tests {
             rent,
             slot_hashes,
             stake_history,
+            lock,
         };
 
         let sysvar_cache: SysvarCache = (&sysvars).into();
