@@ -25,8 +25,8 @@ impl Default for Sysvars {
         let epoch_schedule = EpochSchedule::without_warmup();
         let last_restart_slot = LastRestartSlot::default();
         let rent = Rent::default();
-        let lock = Lock::default();
-
+        let lock = Lock::new(false, clock.unix_timestamp);
+        
         let slot_hashes = {
             let mut default_slot_hashes = vec![(0, Hash::default()); SLOT_HASHES_MAX_ENTRIES];
             default_slot_hashes[0] = (clock.slot, Hash::default());
@@ -139,8 +139,10 @@ impl Sysvars {
         ]
     }
 
-    pub fn toggle_lock(&mut self, locked: bool) {
+    pub fn toggle_lock(&mut self, locked: bool, last_changed: i64) {
         self.lock.locked = locked;
+        self.lock.last_changed = last_changed;
+        self.lock.lock_count = self.lock.lock_count.saturating_add(1);
     }
 
     /// Warp the test environment to a slot by updating sysvars.
@@ -320,7 +322,7 @@ mod tests {
             stake_history.add(9, StakeHistoryEntry::default());
             stake_history
         };
-        let lock = Lock::new(false);
+        let lock = Lock::default();
 
         let sysvars = Sysvars {
             clock,

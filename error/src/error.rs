@@ -24,6 +24,8 @@ pub enum MolluskError<'a> {
     /// Program targeted by the instruction is missing from the cache.
     #[error("    [MOLLUSK]: Program targeted by the instruction is missing from the cache: {0}")]
     ProgramNotCached(&'a Pubkey),
+    #[error("    [MOLLUSK]: The chain lock sysvar is engaged. Cannot process instruction")]
+    ChainLockEngaged,
 }
 
 pub trait MolluskPanic<T> {

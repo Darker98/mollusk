@@ -676,8 +676,8 @@ impl Mollusk {
         self.program_cache.add_program(program_id, loader_key, elf);
     }
 
-    pub fn toggle_lock(&mut self, locked: bool) {
-        self.sysvars.toggle_lock(locked);
+    pub fn toggle_lock(&mut self, locked: bool, last_changed: i64) {
+        self.sysvars.toggle_lock(locked, last_changed);
     }
 
     /// Warp the test environment to a slot by updating sysvars.
@@ -693,7 +693,7 @@ impl Mollusk {
         accounts: &[(Pubkey, Account)],
     ) -> InstructionResult {
         if self.sysvars.lock.locked == true {
-            panic!("Sysvar lock is engaged. Cannot process instruction.");
+            panic!("{:?}", MolluskError::ChainLockEngaged);
         }
 
         let mut compute_units_consumed = 0;
@@ -1351,12 +1351,9 @@ mod tests {
             (key2, Account::default()),
         ];
 
-        let mut mollusk = {
-            let mollusk = Mollusk::default();
-            mollusk
-        };
+        let mut mollusk = Mollusk::default();
 
-        mollusk.toggle_lock(true); // Engage the lock
+        mollusk.toggle_lock(true, mollusk.sysvars.clock.unix_timestamp); // Engage the lock
         let result = mollusk.process_instruction(&instruction, &accounts);
     }
 }
