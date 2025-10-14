@@ -1,10 +1,10 @@
-
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use solana_sysvar::{Sysvar, SysvarSerialize};
 
 #[repr(C)]
-// #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct Lock {
     // global state of the chain
     pub locked: bool,
