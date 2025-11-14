@@ -1354,6 +1354,6 @@ mod tests {
         let mut mollusk = Mollusk::default();
 
         mollusk.toggle_lock(true, mollusk.sysvars.clock.unix_timestamp); // Engage the lock
-        let result = mollusk.process_instruction(&instruction, &accounts);
+        let _ = mollusk.process_instruction(&instruction, &accounts);
     }
 }
